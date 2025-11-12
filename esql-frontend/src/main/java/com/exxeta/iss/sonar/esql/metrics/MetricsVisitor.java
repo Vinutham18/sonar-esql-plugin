@@ -113,7 +113,7 @@ public class MetricsVisitor extends SubscriptionVisitor {
 
 		saveMetricOnFile(CoreMetrics.COMPLEXITY, fileComplexity);
 		saveMetricOnFile(EsqlMetrics.MODULE_COMPLEXITY, moduleComplexity);
-		saveMetricOnFile(CoreMetrics.COMPLEXITY_IN_FUNCTIONS, functionComplexity);
+	//	saveMetricOnFile(CoreMetrics.COMPLEXITY_IN_FUNCTIONS, functionComplexity);
 
 		sensorContext.<String>newMeasure().on(inputFile).forMetric(CoreMetrics.FUNCTION_COMPLEXITY_DISTRIBUTION)
 				.withValue(functionComplexityDistribution.build()).save();
