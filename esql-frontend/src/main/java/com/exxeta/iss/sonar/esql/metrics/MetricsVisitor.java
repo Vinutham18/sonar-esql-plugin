@@ -24,7 +24,7 @@ import java.util.Set;
 
 import org.sonar.api.batch.fs.InputFile;
 import org.sonar.api.batch.sensor.SensorContext;
-import org.sonar.api.ce.measure.RangeDistributionBuilder;
+//import org.sonar.api.ce.measure.RangeDistributionBuilder;
 import org.sonar.api.measures.CoreMetrics;
 import org.sonar.api.measures.FileLinesContext;
 import org.sonar.api.measures.FileLinesContextFactory;
@@ -39,8 +39,8 @@ import com.google.common.collect.ImmutableSet;
 
 public class MetricsVisitor extends SubscriptionVisitor {
 
-	private static final Number[] LIMITS_COMPLEXITY_FUNCTIONS = { 1, 2, 4, 6, 8, 10, 12, 20, 30 };
-	private static final Number[] FILES_DISTRIB_BOTTOM_LIMITS = { 0, 5, 10, 20, 30, 60, 90 };
+	//private static final Number[] LIMITS_COMPLEXITY_FUNCTIONS = { 1, 2, 4, 6, 8, 10, 12, 20, 30 };
+	//private static final Number[] FILES_DISTRIB_BOTTOM_LIMITS = { 0, 5, 10, 20, 30, 60, 90 };
 
 	private final SensorContext sensorContext;
 	private InputFile inputFile;
@@ -49,9 +49,9 @@ public class MetricsVisitor extends SubscriptionVisitor {
 	private Map<InputFile, Set<Integer>> projectExecutableLines;
 
 	private int moduleComplexity;
-	private int functionComplexity;
-	private RangeDistributionBuilder functionComplexityDistribution;
-	private RangeDistributionBuilder fileComplexityDistribution;
+	//private int functionComplexity;
+	//private RangeDistributionBuilder functionComplexityDistribution;
+	//private RangeDistributionBuilder fileComplexityDistribution;
 
 	public MetricsVisitor(SensorContext context, Boolean ignoreHeaderComments,
 			FileLinesContextFactory fileLinesContextFactory) {
@@ -96,8 +96,8 @@ public class MetricsVisitor extends SubscriptionVisitor {
 
 	private void init() {
 		moduleComplexity = 0;
-		functionComplexityDistribution = new RangeDistributionBuilder(LIMITS_COMPLEXITY_FUNCTIONS);
-		fileComplexityDistribution = new RangeDistributionBuilder(FILES_DISTRIB_BOTTOM_LIMITS);
+		//functionComplexityDistribution = new RangeDistributionBuilder(LIMITS_COMPLEXITY_FUNCTIONS);
+		//fileComplexityDistribution = new RangeDistributionBuilder(FILES_DISTRIB_BOTTOM_LIMITS);
 	}
 
 	private void saveCounterMetrics(TreeVisitorContext context) {
@@ -115,13 +115,13 @@ public class MetricsVisitor extends SubscriptionVisitor {
 		saveMetricOnFile(EsqlMetrics.MODULE_COMPLEXITY, moduleComplexity);
 	//	saveMetricOnFile(CoreMetrics.COMPLEXITY_IN_FUNCTIONS, functionComplexity);
 
-		sensorContext.<String>newMeasure().on(inputFile).forMetric(CoreMetrics.FUNCTION_COMPLEXITY_DISTRIBUTION)
-				.withValue(functionComplexityDistribution.build()).save();
+	//	sensorContext.<String>newMeasure().on(inputFile).forMetric(CoreMetrics.FUNCTION_COMPLEXITY_DISTRIBUTION)
+	//			.withValue(functionComplexityDistribution.build()).save();
 
-		fileComplexityDistribution.add(fileComplexity);
+	//	fileComplexityDistribution.add(fileComplexity);
 
-		sensorContext.<String>newMeasure().on(inputFile).forMetric(CoreMetrics.FILE_COMPLEXITY_DISTRIBUTION)
-				.withValue(fileComplexityDistribution.build()).save();
+	//	sensorContext.<String>newMeasure().on(inputFile).forMetric(CoreMetrics.FILE_COMPLEXITY_DISTRIBUTION)
+	//			.withValue(fileComplexityDistribution.build()).save();
 	}
 
 	private void saveLineMetrics(TreeVisitorContext context) {
