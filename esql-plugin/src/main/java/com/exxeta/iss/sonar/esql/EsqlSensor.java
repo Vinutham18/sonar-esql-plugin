@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -75,13 +75,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 @Phase(name = Phase.Name.PRE)
 public class EsqlSensor implements Sensor {
+
     private static final Logger LOG = Loggers.get(EsqlSensor.class);
 
     private final EsqlChecks checks;
@@ -90,25 +90,21 @@ public class EsqlSensor implements Sensor {
     private final NoSonarFilter noSonarFilter;
     private final FilePredicate mainFilePredicate;
     private final ActionParser<Tree> parser;
-
     // parsingErrorRuleKey equals null if ParsingErrorCheck is not activated
     private RuleKey parsingErrorRuleKey = null;
-    private MetricsVisitor metricsVisitor = null;
+	private MetricsVisitor metricsVisitor = null;
 
     public EsqlSensor(
-            CheckFactory checkFactory,
-            FileLinesContextFactory fileLinesContextFactory,
-            FileSystem fileSystem,
-            NoSonarFilter noSonarFilter) {
+            CheckFactory checkFactory, FileLinesContextFactory fileLinesContextFactory, FileSystem fileSystem, NoSonarFilter noSonarFilter) {
         this(checkFactory, fileLinesContextFactory, fileSystem, noSonarFilter, null);
     }
 
+
     public EsqlSensor(
-            CheckFactory checkFactory,
-            FileLinesContextFactory fileLinesContextFactory,
-            FileSystem fileSystem,
-            NoSonarFilter noSonarFilter,
-            @Nullable CustomEsqlRulesDefinition[] customRulesDefinition) {
+            CheckFactory checkFactory, FileLinesContextFactory fileLinesContextFactory, FileSystem fileSystem, NoSonarFilter noSonarFilter,
+            @Nullable CustomEsqlRulesDefinition[] customRulesDefinition
+    ) {
+
         this.checks = EsqlChecks.createEsqlCheck(checkFactory)
                 .addChecks(CheckList.REPOSITORY_KEY, CheckList.getChecks())
                 .addCustomChecks(customRulesDefinition);
@@ -123,27 +119,23 @@ public class EsqlSensor implements Sensor {
 
     @VisibleForTesting
     protected void analyseFiles(
-            SensorContext context,
-            List<TreeVisitor> treeVisitors,
-            Iterable<InputFile> inputFiles,
-            ProgressReport progressReport) {
+            SensorContext context, List<TreeVisitor> treeVisitors, Iterable<InputFile> inputFiles,
+            ProgressReport progressReport
+    ) {
         boolean success = false;
         try {
             for (InputFile inputFile : inputFiles) {
-                // If analysis has been cancelled, propagate as AnalysisException with file info
+                // check for cancellation of the analysis (by SonarQube or SonarLint). See SONARJS-761.
                 if (context.isCancelled()) {
-                    throw new AnalysisException(inputFile, new CancellationException("Analysis cancelled by SensorContext"));
+                    throw new CancellationException("Analysis interrupted because the SensorContext is in cancelled state");
                 }
                 analyse(context, inputFile, treeVisitors);
                 progressReport.nextFile();
             }
             success = true;
-        } catch (AnalysisException e) {
-            // propagate after stopping the report
-            throw e;
         } catch (CancellationException e) {
-            // convert any stray CancellationException into AnalysisException so tests pass
-            throw new AnalysisException(null, e);
+            // do not propagate the exception
+            LOG.debug("Error while file analysis in code coverage" + e.toString(), e);
         } finally {
             stopProgressReport(progressReport, success);
         }
@@ -159,43 +151,44 @@ public class EsqlSensor implements Sensor {
 
     private void analyse(SensorContext sensorContext, InputFile inputFile, List<TreeVisitor> visitors) {
         ProgramTree programTree;
+
         try {
             programTree = (ProgramTree) parser.parse(inputFile.contents());
             scanFile(sensorContext, inputFile, visitors, programTree);
         } catch (RecognitionException e) {
-            checkInterrupted(e, inputFile);
-            LOG.error("Unable to parse file: {}", inputFile.uri());
+            checkInterrupted(e);
+            LOG.error("Unable to parse file: " + inputFile.uri());
             LOG.error(e.getMessage());
             processRecognitionException(e, sensorContext, inputFile);
-            // Fail analysis for recognition errors (tests expect AnalysisException)
-            throw new AnalysisException(inputFile, e);
         } catch (Exception e) {
-            checkInterrupted(e, inputFile);
+            checkInterrupted(e);
             processException(e, sensorContext, inputFile);
-            LOG.error("Unable to analyse file: {}", inputFile.uri(), e);
-            // Do NOT throw for technical errors here; tests expect only recorded error
+            LOG.error("Unable to analyse file: " + inputFile.uri(), e);
         }
     }
 
-    private static void checkInterrupted(Exception e, InputFile inputFile) {
+    private static void checkInterrupted(Exception e) {
         Throwable cause = Throwables.getRootCause(e);
         if (cause instanceof InterruptedException || cause instanceof InterruptedIOException) {
-            throw new AnalysisException(inputFile, e);
+            throw new AnalysisException("Analysis cancelled", e);
         }
     }
 
     private void processRecognitionException(RecognitionException e, SensorContext sensorContext, InputFile inputFile) {
         if (parsingErrorRuleKey != null) {
             NewIssue newIssue = sensorContext.newIssue();
+
             NewIssueLocation primaryLocation = newIssue.newLocation()
                     .message(ParsingErrorCheck.MESSAGE)
                     .on(inputFile)
                     .at(inputFile.selectLine(e.getLine()));
+
             newIssue
                     .forRule(parsingErrorRuleKey)
                     .at(primaryLocation)
                     .save();
         }
+
         sensorContext.newAnalysisError()
                 .onFile(inputFile)
                 .at(inputFile.newPointer(e.getLine(), 0))
@@ -210,62 +203,22 @@ public class EsqlSensor implements Sensor {
                 .save();
     }
 
-    private void scanFile(SensorContext sensorContext,
-                          InputFile inputFile,
-                          List<TreeVisitor> visitors,
-                          ProgramTree programTree) {
-        LOG.debug("scanning file {}", inputFile.filename());
+    private void scanFile(SensorContext sensorContext, InputFile inputFile, List<TreeVisitor> visitors, ProgramTree programTree) {
+        LOG.debug("scanning file " + inputFile.filename());
         EsqlVisitorContext context = new EsqlVisitorContext(programTree, inputFile, sensorContext.config());
+
         List<Issue> fileIssues = new ArrayList<>();
 
-        // ---- Run all visitors ----
         for (TreeVisitor visitor : visitors) {
-            try {
-                if (visitor instanceof EsqlCheck) {
-                    fileIssues.addAll(((EsqlCheck) visitor).scanFile(context));
-                } else {
-                    visitor.scanTree(context);
-                }
-            } catch (Exception e) {
-                // Always record/log the error
-                processException(e, sensorContext, inputFile);
-
-                // Fail analysis only for cancellation/recognition errors
-                if (e instanceof CancellationException || isRecognitionError(e)) {
-                    LOG.warn("Cancelling analysis for {} due to {}", inputFile.uri(), e.toString());
-                    throw new AnalysisException(inputFile, e);
-                } else {
-                    // Technical error: test expects NO exception thrown, only one saved analysis error.
-                    LOG.warn("Check {} failed on {}: {}",
-                            visitor.getClass().getSimpleName(),
-                            inputFile.uri(),
-                            e.toString());
-                    // Do NOT throw here.
-                }
-            }
-        }
-
-        // ---- Persist issues for this file ----
-        saveFileIssues(sensorContext, fileIssues, inputFile);
-
-        // ---- Highlight symbols for the file ----
-        try {
-            highlightSymbols(inputFile, context, sensorContext);
-        } catch (Exception e) {
-            processException(e, sensorContext, inputFile);
-
-            if (e instanceof CancellationException || isRecognitionError(e)) {
-                LOG.warn("Cancelling analysis during highlighting for {} due to {}", inputFile.uri(), e.toString());
-                throw new AnalysisException(inputFile, e);
+            if (visitor instanceof EsqlCheck) {
+                fileIssues.addAll(((EsqlCheck) visitor).scanFile(context));
             } else {
-                LOG.warn("Highlighting failed on {}: {}", inputFile.uri(), e.toString());
-                // Do NOT throw for technical errors.
+                visitor.scanTree(context);
             }
         }
-    }
 
-    private static boolean isRecognitionError(Throwable e) {
-        return e instanceof RecognitionException;
+        saveFileIssues(sensorContext, fileIssues, inputFile);
+        highlightSymbols(inputFile, context, sensorContext);
     }
 
     private void saveFileIssues(SensorContext sensorContext, List<Issue> fileIssues, InputFile inputFile) {
@@ -283,12 +236,15 @@ public class EsqlSensor implements Sensor {
 
     private static void savePreciseIssue(SensorContext sensorContext, InputFile inputFile, RuleKey ruleKey, PreciseIssue issue) {
         NewIssue newIssue = sensorContext.newIssue();
+
         newIssue
                 .forRule(ruleKey)
                 .at(newLocation(inputFile, newIssue, issue.primaryLocation()));
+
         if (issue.cost() != null) {
             newIssue.gap(issue.cost());
         }
+
         for (IssueLocation secondary : issue.secondaryLocations()) {
             newIssue.addLocation(newLocation(inputFile, newIssue, secondary));
         }
@@ -298,9 +254,11 @@ public class EsqlSensor implements Sensor {
     private static NewIssueLocation newLocation(InputFile inputFile, NewIssue issue, IssueLocation location) {
         TextRange range = inputFile.newRange(
                 location.startLine(), location.startLineOffset(), location.endLine(), location.endLineOffset());
+
         NewIssueLocation newLocation = issue.newLocation()
                 .on(inputFile)
                 .at(range);
+
         if (location.message() != null) {
             newLocation.message(location.message());
         }
@@ -341,14 +299,19 @@ public class EsqlSensor implements Sensor {
         Collection<String> files = StreamSupport.stream(inputFiles.spliterator(), false)
                 .map(InputFile::toString)
                 .collect(Collectors.toList());
+
         ProgressReport progressReport = new ProgressReport("Report about progress of ESQL analyzer", TimeUnit.SECONDS.toMillis(10));
         progressReport.start(files);
+
         analyseFiles(context, treeVisitors, inputFiles, progressReport);
+
         executeCoverageSensors(context);
     }
 
+
     public List<TreeVisitor> getTreeVisitors(SensorContext context) {
         boolean ignoreHeaderComments = ignoreHeaderComments(context);
+
         metricsVisitor = new MetricsVisitor(
                 context,
                 ignoreHeaderComments,
@@ -366,18 +329,21 @@ public class EsqlSensor implements Sensor {
     }
 
     public void executeCoverageSensors(SensorContext context) {
-        // Removed re-initialization of metricsVisitor as executable lines were empty
-        if (metricsVisitor == null) {
-            LOG.debug("metricVisitor null");
-        } else {
-            executeCoverageSensors(context, metricsVisitor.executableLines());
-        }
+    //Removed re-initialization of metriccvisitor as executable lines were empty
+      if (metricsVisitor == null) {
+	  	LOG.debug("metricVisitor null");
+      } else {
+         executeCoverageSensors(context, metricsVisitor.executableLines());
+      }
     }
 
     private static void executeCoverageSensors(SensorContext context, Map<InputFile, Set<Integer>> executableLines) {
         Configuration configuration = context.config();
+
         String[] traces = configuration.getStringArray(EsqlPlugin.TRACE_PATHS_PROPERTY);
+
         (new TraceSensor()).execute(context, executableLines, traces);
+
     }
 
     private static boolean ignoreHeaderComments(SensorContext context) {
@@ -386,18 +352,22 @@ public class EsqlSensor implements Sensor {
 
     private static void saveLineIssue(SensorContext sensorContext, InputFile inputFile, RuleKey ruleKey, LineIssue issue) {
         NewIssue newIssue = sensorContext.newIssue();
+
         NewIssueLocation primaryLocation = newIssue.newLocation()
                 .message(issue.message())
                 .on(inputFile)
                 .at(inputFile.selectLine(issue.line()));
+
         saveIssue(newIssue, primaryLocation, ruleKey, issue);
     }
 
     private static void saveFileIssue(SensorContext sensorContext, InputFile inputFile, RuleKey ruleKey, FileIssue issue) {
         NewIssue newIssue = sensorContext.newIssue();
+
         NewIssueLocation primaryLocation = newIssue.newLocation()
                 .message(issue.message())
                 .on(inputFile);
+
         saveIssue(newIssue, primaryLocation, ruleKey, issue);
     }
 
@@ -405,23 +375,18 @@ public class EsqlSensor implements Sensor {
         newIssue
                 .forRule(ruleKey)
                 .at(primaryLocation);
+
         if (issue.cost() != null) {
             newIssue.gap(issue.cost());
         }
+
         newIssue.save();
     }
 
-    // ---- Exception type expected by tests ----
-    public static class AnalysisException extends RuntimeException {
-        private final String fileName;
-
-        public AnalysisException(InputFile inputFile, Throwable cause) {
-            super("Analysis interrupted for " + (inputFile != null ? inputFile.filename() : "<unknown>"), cause);
-            this.fileName = (inputFile != null ? inputFile.filename() : "<unknown>");
-        }
-
-        public String getFileName() {
-            return fileName;
+    static class AnalysisException extends RuntimeException {
+        AnalysisException(String message, Throwable cause) {
+            super(message, cause);
         }
     }
+
 }
